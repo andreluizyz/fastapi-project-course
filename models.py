@@ -16,7 +16,7 @@ class User(Base):
     id = Column("id", Integer, primary_key=True, autoincrement=True)
     name = Column("name", String)
     email = Column("email", String, nullable=False)
-    number = Column("number", Float, nullable=False)
+    number = Column("number", String, nullable=False)
     password = Column("password", String)
     status = Column("status", Boolean)
     admin = Column("admin", Boolean, default=False)
