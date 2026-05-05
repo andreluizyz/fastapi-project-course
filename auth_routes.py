@@ -2,13 +2,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from models import User
 from dependencies import get_session
 from main import bcrypt_context
-from schemas import UserSchema
+from schemas import UserSchema, LoginSchema
 from sqlalchemy.orm import Session
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
+def create_token(id_user):
+    token = f"sdgehusrhgfuysu38sdfhg{id_user}"
+    return token
+
+def user_authenticate(email, password, session):
+    user = session.query(User).filter(User.email == email).first()
+    if not user:
+        return False
+    elif not bcrypt_context.verify(password, user.password):
+        return False
+    return user
+
 @auth_router.get("/")
-async def authenticate():
+async def home():
     """
     This is the default authentication route of our system
     """
@@ -26,3 +38,15 @@ async def create_user(user_schema: UserSchema, session: Session = Depends(get_se
         session.commit()
         return {"mensagem": f"User created sucessfully {user_schema.email}"}
     
+
+@auth_router.post("/login")
+async def login(login_schema: LoginSchema, session: Session = Depends(get_session)):
+    user = user_authenticate(login_schema.email, login_schema.password, session)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found or invalid credentials")
+    else:
+        access_token = create_token(user.id)
+        return {
+            "access_token": access_token,
+            "token_type": "Bearer"
+        }
