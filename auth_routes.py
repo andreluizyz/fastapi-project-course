@@ -10,11 +10,16 @@ from datetime import datetime, timedelta, timezone
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
-def create_token(id_user, duration_token=ACCESS_TOKEN_EXPIRE_MINUTES):
-    date_expiration = datetime.now(timezone.utc) + timedelta(minutes=duration_token)
+def create_token(id_user, duration_token=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)):
+    date_expiration = datetime.now(timezone.utc) + duration_token   
     dic_info = {"sub": id_user, "exp": date_expiration}
     jwt_encoded = jwt.encode(dic_info, SECRET_KEY, ALGORITHM)
     return jwt_encoded
+
+def check_token(token, session: Session = Depends(get_session)):
+
+    user = session.query(User).filter(User.id==1).first()
+    return user
 
 def user_authenticate(email, password, session):
     user = session.query(User).filter(User.email == email).first()
@@ -37,7 +42,7 @@ async def create_user(user_schema: UserSchema, session: Session = Depends(get_se
     if user:
         return HTTPException(status_code=400, detail="User email already exists")
     else:
-        crypt_password = bcrypt_context.hash(user_schema.passsword)
+        crypt_password = bcrypt_context.hash(user_schema.password)
         new_user = User(name=user_schema.name, email=user_schema.email, password=crypt_password, number=user_schema.number, status=user_schema.status, admin=user_schema.admin) 
         session.add(new_user)
         session.commit()
@@ -55,5 +60,14 @@ async def login(login_schema: LoginSchema, session: Session = Depends(get_sessio
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
+            "token_type": "Bearer"
+        }
+
+@auth_router.get("/refresh")
+async def use_refresh_token(token):
+    user = check_token(token)
+    access_token = create_token(user.id)
+    return {
+            "access_token": access_token,
             "token_type": "Bearer"
         }
