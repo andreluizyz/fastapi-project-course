@@ -10,8 +10,8 @@ from datetime import datetime, timedelta, timezone
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
-def create_token(id_user):
-    date_expiration = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+def create_token(id_user, duration_token=ACCESS_TOKEN_EXPIRE_MINUTES):
+    date_expiration = datetime.now(timezone.utc) + timedelta(minutes=duration_token)
     dic_info = {"sub": id_user, "exp": date_expiration}
     jwt_encoded = jwt.encode(dic_info, SECRET_KEY, ALGORITHM)
     return jwt_encoded
@@ -51,7 +51,9 @@ async def login(login_schema: LoginSchema, session: Session = Depends(get_sessio
         raise HTTPException(status_code=400, detail="User not found or invalid credentials")
     else:
         access_token = create_token(user.id)
+        refresh_token = create_token(user.id, duration_token=timedelta(days=7))
         return {
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "Bearer"
         }
