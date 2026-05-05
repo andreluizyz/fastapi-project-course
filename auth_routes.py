@@ -32,7 +32,7 @@ def user_authenticate(email, password, session):
 @auth_router.get("/")
 async def home():
     """
-    This is the default authentication route of our system
+    This is the default authentication route of our system.
     """
     return {"mensagem": "Você acessou a rota padrão de autenticação", "autenticado": False}
 
