@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session, sessionmaker
 from models import User, db
 from jose import jwt, JWTError
-from main import SECRET_KEY, ALGORITHM
+from main import SECRET_KEY, ALGORITHM, oauth2_schema
 
 def get_session():
     try:
@@ -12,10 +12,10 @@ def get_session():
     finally:
         session.close()
 
-def check_token(token, session: Session = Depends(get_session)):
+def check_token(token: str = Depends(oauth2_schema), session: Session = Depends(get_session)):
     try: 
         dic_info = jwt.decode(token, SECRET_KEY, ALGORITHM)
-        id_user = dic_info.get("sub")
+        id_user = int(dic_info.get("sub"))
     except JWTError:
         raise HTTPException(status_code=401, detail="Access Denied, check the date expiration of token")
 
