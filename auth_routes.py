@@ -30,7 +30,9 @@ async def home():
     """
     This is the default authentication route of our system.
     """
-    return {"mensagem": "Você acessou a rota padrão de autenticação", "autenticado": False}
+    return {
+        "mensagem": "You access the standard route", "autenticado": False
+        }
 
 @auth_router.post("/create_user")
 async def create_user(user_schema: UserSchema, session: Session = Depends(get_session)):
@@ -42,7 +44,9 @@ async def create_user(user_schema: UserSchema, session: Session = Depends(get_se
         new_user = User(name=user_schema.name, email=user_schema.email, password=crypt_password, number=user_schema.number, status=user_schema.status, admin=user_schema.admin) 
         session.add(new_user)
         session.commit()
-        return {"mensagem": f"User created sucessfully {user_schema.email}"}
+        return {
+            "mensagem": f"User created sucessfully {user_schema.email}"
+            }
     
 
 @auth_router.post("/login")
