@@ -18,7 +18,7 @@ async def create_order(order_schema: OrderSchema, session: Session = Depends(get
     session.add(new_order)
     session.commit()
     return {
-        "message": f"Order created with success. Id Order: {new_order.user}"
+        "message": f"Order created successfully. Id Order: {new_order.user}"
         }
 
 @order_router.post("/order/cancel/{id_order}")
@@ -28,11 +28,20 @@ async def cancel_order(id_order: int, session: Session = Depends(get_session), u
     if not order:
         raise HTTPException(status_code=400, detail="Order not found")
     if not user.admin or user.id != order.user:
-        raise HTTPException(status_code=401, detail="You not have a authorization for modify this order")
+        raise HTTPException(status_code=401, detail="You are not authorized for modify this order")
     order.status = "CANCELED"
     session.commit()
     return {
-        "message": f"Order number: {order.id} canceled with success",
+        "message": f"Order number: {order.id} canceled successfully",
         "order": order
     }
-    
+
+@order_router.get("/list")
+async def order_list(session: Session = Depends(get_session), user : User = Depends(check_token)):
+    if not user.admin:
+        raise HTTPException(status_code=401, detail="You are not authorized for this operation")
+    else:
+        orders = session.query(Order).all
+        return {
+            "orders": orders
+        }
