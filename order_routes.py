@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from schemas import OrderSchema
-from dependencies import get_session
+from dependencies import get_session, check_token
 from models import Order
 
-order_router = APIRouter(prefix="/order", tags=["order"])
+order_router = APIRouter(prefix="/order", tags=["order"], dependencies=[Depends(check_token)])
 
 @order_router.get("/")
 async def orders():
