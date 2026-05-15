@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Column, String, Integer, Boolean, Float, ForeignKey
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy_utils.types import ChoiceType
 
 # create the conection to your database
@@ -42,11 +42,15 @@ class Order(Base):
     status = Column("status", String) # Pending, Canceled, Completed 
     user = Column("user", ForeignKey("users.id"))
     price = Column("price", Float)
+    items = relationship("OrderItem", cascade="all, delete")
 
-    def __init__(self, user, status="PENDING", preco=0):
+    def __init__(self, user, status="PENDING", price=0):
         self.user = user
         self.status = status
-        self.preco = preco
+        self.price = price
+
+    def calculate_price(self):
+        self.price = sum(item.unit_price * item.quantity for item in self.items)
 
 
 class OrderItem(Base):
@@ -67,3 +71,6 @@ class OrderItem(Base):
         self.order = order
 
 # run the metadata creation on your database
+
+# create migration: alembic revision --autogenerate -m "message"
+# run migration: alembic upgrade head

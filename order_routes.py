@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from schemas import OrderSchema
+from schemas import OrderSchema, OrderItemSchema
 from dependencies import get_session, check_token
-from models import Order, User
+from models import Order, User, OrderItem
 
 order_router = APIRouter(prefix="/order", tags=["order"], dependencies=[Depends(check_token)])
 
@@ -41,7 +41,25 @@ async def order_list(session: Session = Depends(get_session), user : User = Depe
     if not user.admin:
         raise HTTPException(status_code=401, detail="You are not authorized for this operation")
     else:
-        orders = session.query(Order).all
+        orders = session.query(Order).all()
         return {
             "orders": orders
         }
+    
+@order_router.post("order/add-item/{id_order}")
+async def add_item_order(id_order: int, order_item_Schema: OrderItemSchema, session: Session = Depends(get_session), user : User = Depends(check_token)):
+    order = session.query(Order).filter(Order.id == id_order).first()
+    if not order:
+        raise HTTPException(status_code=400, detail="Order not found")
+    if not user.admin or user.id != order.user:
+        raise HTTPException(status_code=401, detail="You are not authorized for modify this order")
+    order_item = OrderItem(order_item_Schema.quantity, order_item_Schema.flavor, order_item_Schema.size, order_item_Schema.unit_price, id_order)
+    session.add(order_item)
+    order.calculate_price()
+    session.commit()
+    return {
+        "message": "Order created successfully",
+        "id_item": order_item.id,
+        "order_price": order.price
+    }
+
