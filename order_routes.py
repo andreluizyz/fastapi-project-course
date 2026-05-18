@@ -55,7 +55,24 @@ async def add_item_order(id_order: int, order_item_Schema: OrderItemSchema, sess
         raise HTTPException(status_code=401, detail="You are not authorized for modify this order")
     order_item = OrderItem(order_item_Schema.quantity, order_item_Schema.flavor, order_item_Schema.size, order_item_Schema.unit_price, id_order)
     session.add(order_item)
-    order.calculate_price()
+    order.calculate_price()    
+    session.commit()
+    return {
+        "message": "Order created successfully",
+        "id_item": order_item.id,
+        "order_price": order.price
+    }
+
+@order_router.post("order/remove-item/{id_item_order}")
+async def remove_item_order(id_item_order: int, session: Session = Depends(get_session), user : User = Depends(check_token)):
+    item_order = session.query(OrderItem).filter(OrderItem.id == id_item_order).first()
+    if not item_order:
+        raise HTTPException(status_code=400, detail="Item order not found")
+    if not user.admin or user.id != item_order.order.user:
+        raise HTTPException(status_code=401, detail="You are not authorized for modify this order")
+    order_item = OrderItem(order_item_Schema.quantity, order_item_Schema.flavor, order_item_Schema.size, order_item_Schema.unit_price, id_order)
+    session.add(order_item)
+    order.calculate_price()    
     session.commit()
     return {
         "message": "Order created successfully",
