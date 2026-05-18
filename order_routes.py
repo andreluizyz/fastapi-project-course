@@ -60,14 +60,13 @@ async def add_item_order(id_order: int, order_item_Schema: OrderItemSchema, sess
     return {
         "message": "Order created successfully",
         "id_item": order_item.id,
+        "item": order_item.flavor,
         "order_price": order.price
     }
 
 @order_router.post("/order/remove-item/{id_item_order}")
 async def remove_item_order(id_item_order: int, session: Session = Depends(get_session), user : User = Depends(check_token)):
     item_order = session.query(OrderItem).filter(OrderItem.id == id_item_order).first()
-    if not item_order:
-        raise HTTPException(status_code=400, detail="Item order not found")
     order = session.query(Order).filter(Order.id == item_order.order).first()
     if not order:
         raise HTTPException(status_code=400, detail="Order not found")
@@ -79,6 +78,21 @@ async def remove_item_order(id_item_order: int, session: Session = Depends(get_s
     session.commit()
     return {
         "message": "Item removed successfully",
-        "order": order.price
+        "quantity_order_items": len(order.items),
+        "order": order
+    }
+
+@order_router.post("/order/finish/{id_order}")
+async def finish_order(id_order: int, session: Session = Depends(get_session), user : User = Depends(check_token)):
+    order = session.query(Order).filter(Order.id == id_order).first()
+    if not order:
+        raise HTTPException(status_code=400, detail="Order not found")
+    if not user.admin or user.id != order.user:
+        raise HTTPException(status_code=401, detail="You are not authorized for modify this order")  
+    order.status = "COMPLETED"
+    session.commit()
+    return {
+        "message": "Order completed successfully",
+        "order": order
     }
 
