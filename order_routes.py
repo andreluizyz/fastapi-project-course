@@ -68,13 +68,17 @@ async def remove_item_order(id_item_order: int, session: Session = Depends(get_s
     item_order = session.query(OrderItem).filter(OrderItem.id == id_item_order).first()
     if not item_order:
         raise HTTPException(status_code=400, detail="Item order not found")
-    if not user.admin or user.id != item_order.order.user:
+    order = session.query(Order).filter(Order.id == item_order.order).first()
+    if not order:
+        raise HTTPException(status_code=400, detail="Order not found")
+    if not user.admin or user.id != order.user:
         raise HTTPException(status_code=401, detail="You are not authorized for modify this order")
-    session.add(item_order)
-    item_order.order.calculate_price()    
+    session.delete(item_order)
+    session.flush()
+    order.calculate_price()
     session.commit()
     return {
         "message": "Item removed successfully",
-        "order": item_order.order
+        "order": order.price
     }
 
