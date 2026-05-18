@@ -4,7 +4,7 @@ from schemas import OrderSchema, OrderItemSchema
 from dependencies import get_session, check_token
 from models import Order, User, OrderItem
 
-order_router = APIRouter(prefix="/order", tags=["order"], dependencies=[Depends(check_token)])
+order_router = APIRouter(prefix="/orders", tags=["orders"], dependencies=[Depends(check_token)])
 
 @order_router.get("/")
 async def orders():
@@ -46,7 +46,7 @@ async def order_list(session: Session = Depends(get_session), user : User = Depe
             "orders": orders
         }
     
-@order_router.post("order/add-item/{id_order}")
+@order_router.post("/order/add-item/{id_order}")
 async def add_item_order(id_order: int, order_item_Schema: OrderItemSchema, session: Session = Depends(get_session), user : User = Depends(check_token)):
     order = session.query(Order).filter(Order.id == id_order).first()
     if not order:
@@ -63,20 +63,18 @@ async def add_item_order(id_order: int, order_item_Schema: OrderItemSchema, sess
         "order_price": order.price
     }
 
-@order_router.post("order/remove-item/{id_item_order}")
+@order_router.post("/order/remove-item/{id_item_order}")
 async def remove_item_order(id_item_order: int, session: Session = Depends(get_session), user : User = Depends(check_token)):
     item_order = session.query(OrderItem).filter(OrderItem.id == id_item_order).first()
     if not item_order:
         raise HTTPException(status_code=400, detail="Item order not found")
     if not user.admin or user.id != item_order.order.user:
         raise HTTPException(status_code=401, detail="You are not authorized for modify this order")
-    order_item = OrderItem(order_item_Schema.quantity, order_item_Schema.flavor, order_item_Schema.size, order_item_Schema.unit_price, id_order)
-    session.add(order_item)
-    order.calculate_price()    
+    session.add(item_order)
+    item_order.order.calculate_price()    
     session.commit()
     return {
-        "message": "Order created successfully",
-        "id_item": order_item.id,
-        "order_price": order.price
+        "message": "Item removed successfully",
+        "order": item_order.order
     }
 
