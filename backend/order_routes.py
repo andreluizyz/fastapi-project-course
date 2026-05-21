@@ -1,8 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from backend.schemas import OrderSchema, OrderItemSchema, ResponseOrderSchema
-from backend.dependencies import get_session, check_token
-from backend.models import Order, User, OrderItem
+try:
+    from backend.schemas import OrderSchema, OrderItemSchema, ResponseOrderSchema
+    from backend.dependencies import get_session, check_token
+    from backend.models import Order, User, OrderItem
+except ModuleNotFoundError:
+    from schemas import OrderSchema, OrderItemSchema, ResponseOrderSchema
+    from dependencies import get_session, check_token
+    from models import Order, User, OrderItem
 from typing import List
 
 order_router = APIRouter(prefix="/orders", tags=["orders"], dependencies=[Depends(check_token)])

@@ -8,7 +8,7 @@ from alembic import context
 import sys
 import os
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 
 
@@ -23,7 +23,10 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from backend.models import Base
+try:
+    from backend.models import Base
+except ModuleNotFoundError:
+    from models import Base
 
 target_metadata = Base.metadata
 

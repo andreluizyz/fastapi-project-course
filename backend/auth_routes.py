@@ -1,8 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
-from backend.models import User
-from backend.dependencies import get_session, check_token
-from backend.config import bcrypt_context, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY
-from backend.schemas import UserSchema, LoginSchema
+try:
+    from backend.models import User
+    from backend.dependencies import get_session, check_token
+    from backend.config import bcrypt_context, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY
+    from backend.schemas import UserSchema, LoginSchema
+except ModuleNotFoundError:
+    from models import User
+    from dependencies import get_session, check_token
+    from config import bcrypt_context, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, SECRET_KEY
+    from schemas import UserSchema, LoginSchema
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone

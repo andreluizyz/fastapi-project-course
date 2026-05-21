@@ -1,8 +1,12 @@
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session, sessionmaker
-from backend.models import User, db
+try:
+    from backend.models import User, db
+    from backend.config import SECRET_KEY, ALGORITHM, oauth2_schema
+except ModuleNotFoundError:
+    from models import User, db
+    from config import SECRET_KEY, ALGORITHM, oauth2_schema
 from jose import jwt, JWTError
-from backend.config import SECRET_KEY, ALGORITHM, oauth2_schema
 
 def get_session():
     try:
