@@ -1,345 +1,203 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
-function parseBoolean(value) {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return undefined;
+const MENU = [
+  { id: 1, name: "Margherita", description: "Molho, queijo e manjericão", price: 25 },
+  { id: 2, name: "Pepperoni", description: "Pepperoni e queijo extra", price: 32 },
+  { id: 3, name: "Quatro Queijos", description: "Mozzarella, gorgonzola, parmesão e provolone", price: 38 },
+  { id: 4, name: "Frango com Catupiry", description: "Frango desfiado e catupiry", price: 35 }
+];
+
+function useAuthStorage() {
+  const [token, setToken] = useState(localStorage.getItem("access_token") || "");
+  function save(t) {
+    setToken(t);
+    if (t) localStorage.setItem("access_token", t);
+    else localStorage.removeItem("access_token");
+  }
+  return [token, save];
 }
 
 export default function App() {
   const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8000");
-  const [token, setToken] = useState(localStorage.getItem("access_token") || "");
+  const [token, saveToken] = useAuthStorage();
+  const [cart, setCart] = useState([]);
   const [output, setOutput] = useState("Aguardando requisicao...");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerNumber, setCustomerNumber] = useState("");
 
-  const [userForm, setUserForm] = useState({
-    name: "",
-    email: "",
-    number: "",
-    password: "",
-    status: "true",
-    admin: "false"
-  });
-
-  const [loginJsonForm, setLoginJsonForm] = useState({ email: "", password: "" });
-  const [loginFormData, setLoginFormData] = useState({ username: "", password: "" });
-  const [createOrderForm, setCreateOrderForm] = useState({ user: "" });
-  const [cancelOrderId, setCancelOrderId] = useState("");
-  const [addItemOrderId, setAddItemOrderId] = useState("");
-  const [addItemForm, setAddItemForm] = useState({
-    quantity: "",
-    flavor: "",
-    size: "",
-    unit_price: ""
-  });
-  const [removeItemId, setRemoveItemId] = useState("");
-  const [finishOrderId, setFinishOrderId] = useState("");
-  const [viewOrderId, setViewOrderId] = useState("");
-
-  const authHeaders = useMemo(() => {
-    if (!token) return {};
-    return { Authorization: `Bearer ${token}` };
-  }, [token]);
+  const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
   async function requestApi(path, options = {}, needsAuth = false) {
     const url = `${baseUrl}${path}`;
-    const headers = {
-      ...(options.headers || {}),
-      ...(needsAuth ? authHeaders : {})
-    };
-
-    const response = await fetch(url, { ...options, headers });
-    const contentType = response.headers.get("content-type") || "";
-    const body = contentType.includes("application/json")
-      ? await response.json()
-      : await response.text();
-
-    const data = {
-      method: options.method || "GET",
-      url,
-      status: response.status,
-      ok: response.ok,
-      body
-    };
-
-    setOutput(JSON.stringify(data, null, 2));
-
-    if (!response.ok) {
-      throw new Error(`Falha na requisicao: ${response.status}`);
-    }
-
+    const headers = { ...(options.headers || {}), ...(needsAuth ? authHeaders : {}) };
+    const res = await fetch(url, { ...options, headers });
+    const ct = res.headers.get("content-type") || "";
+    const body = ct.includes("application/json") ? await res.json() : await res.text();
+    setOutput(JSON.stringify({ status: res.status, ok: res.ok, body }, null, 2));
+    if (!res.ok) throw new Error("API error");
     return body;
   }
 
-  function saveToken(nextToken) {
-    setToken(nextToken);
-    if (nextToken) {
-      localStorage.setItem("access_token", nextToken);
-    } else {
-      localStorage.removeItem("access_token");
-    }
+  function addToCart(item) {
+    setCart((c) => {
+      const found = c.find((x) => x.id === item.id);
+      if (found) return c.map((x) => (x.id === item.id ? { ...x, qty: x.qty + 1 } : x));
+      return [...c, { ...item, qty: 1 }];
+    });
   }
 
-  async function getAuthHome() {
-    await requestApi("/auth/");
+  function removeFromCart(id) {
+    setCart((c) => c.filter((x) => x.id !== id));
   }
 
-  async function createUser() {
-    const payload = {
-      name: userForm.name,
-      email: userForm.email,
-      number: userForm.number,
-      password: userForm.password,
-      status: parseBoolean(userForm.status),
-      admin: parseBoolean(userForm.admin)
-    };
+  function changeQty(id, qty) {
+    setCart((c) => c.map((x) => (x.id === id ? { ...x, qty } : x)));
+  }
 
+  function total() {
+    return cart.reduce((s, i) => s + i.price * i.qty, 0);
+  }
+
+  async function registerCustomer() {
     await requestApi("/auth/create_user", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ name: customerName, email, number: customerNumber, password, status: true, admin: false })
     });
   }
 
-  async function loginJson() {
+  async function login() {
     const data = await requestApi("/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(loginJsonForm)
+      body: JSON.stringify({ email, password })
     });
-
-    if (data.access_token) {
-      saveToken(data.access_token);
-    }
+    if (data.access_token) saveToken(data.access_token);
   }
 
-  async function loginWithForm() {
-    const params = new URLSearchParams();
-    params.set("username", loginFormData.username);
-    params.set("password", loginFormData.password);
+  async function checkout() {
+    if (!token) {
+      setOutput("Necessita login para criar pedido. Faça login primeiro.");
+      return;
+    }
 
-    const data = await requestApi("/auth/login-form", {
+    // extrai user id do token (campo `sub`) para evitar conflitos com usuário hardcoded
+    const userId = (() => {
+      try {
+        if (!token) return 0;
+        const payload = token.split('.')[1];
+        const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const json = JSON.parse(atob(base64));
+        return Number(json.sub || json.user || json.id) || 0;
+      } catch (e) {
+        return 0;
+      }
+    })();
+
+    if (!userId) {
+      setOutput('Não foi possível detectar o user id a partir do token. Verifique o token ou faça login novamente.');
+      return;
+    }
+
+    const order = await requestApi("/orders/order", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString()
-    });
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: userId })
+    }, true);
 
-    if (data.access_token) {
-      saveToken(data.access_token);
-    }
-  }
-
-  async function refreshToken() {
-    const data = await requestApi("/auth/refresh", {}, true);
-    if (data.access_token) {
-      saveToken(data.access_token);
-    }
-  }
-
-  async function getOrdersHome() {
-    await requestApi("/orders/", {}, true);
-  }
-
-  async function createOrder() {
-    await requestApi(
-      "/orders/order",
-      {
+    const orderId = order?.id || 1;
+    for (const item of cart) {
+      await requestApi(`/orders/order/add-item/${orderId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user: Number(createOrderForm.user) })
-      },
-      true
-    );
-  }
+        body: JSON.stringify({ quantity: item.qty, flavor: item.name, size: "M", unit_price: item.price })
+      }, true);
+    }
 
-  async function cancelOrder() {
-    await requestApi(`/orders/order/cancel/${cancelOrderId}`, { method: "POST" }, true);
-  }
-
-  async function listAllOrders() {
-    await requestApi("/orders/list", {}, true);
-  }
-
-  async function addItemToOrder() {
-    const payload = {
-      quantity: Number(addItemForm.quantity),
-      flavor: addItemForm.flavor,
-      size: addItemForm.size,
-      unit_price: Number(addItemForm.unit_price)
-    };
-
-    await requestApi(
-      `/orders/order/add-item/${addItemOrderId}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      },
-      true
-    );
-  }
-
-  async function removeItemFromOrder() {
-    await requestApi(`/orders/order/remove-item/${removeItemId}`, { method: "POST" }, true);
-  }
-
-  async function finishOrder() {
-    await requestApi(`/orders/order/finish/${finishOrderId}`, { method: "POST" }, true);
-  }
-
-  async function listMyOrders() {
-    await requestApi("/orders/order/orders-user", {}, true);
-  }
-
-  async function viewOrderById() {
-    await requestApi(`/orders/order/${viewOrderId}`, {}, true);
+    await requestApi(`/orders/order/finish/${orderId}`, { method: "POST" }, true);
   }
 
   return (
     <div className="page">
       <header className="hero">
-        <h1>Frontend React para FastAPI</h1>
-        <p>
-          Interface simples para testar todos os endpoints e entender na pratica o consumo da API.
-        </p>
+        <h1>Pizzaria - Frontend</h1>
+        <p>Mini sistema: cardápio, carrinho e checkout integrado com sua API.</p>
       </header>
 
       <section className="card">
-        <h2>Configuracao</h2>
+        <h2>Config</h2>
         <div className="grid two">
           <label>
-            Base URL da API
-            <input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="http://127.0.0.1:8000"
-            />
+            Base URL
+            <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
           </label>
           <label>
-            Access Token (Bearer)
-            <input
-              value={token}
-              onChange={(e) => saveToken(e.target.value)}
-              placeholder="cole o access_token"
-            />
+            Token
+            <input value={token} onChange={(e) => saveToken(e.target.value)} placeholder="Cole o token aqui" />
           </label>
-        </div>
-        <div className="actions">
-          <button className="btn danger" onClick={() => saveToken("")}>Limpar token</button>
-          <button className="btn" onClick={refreshToken}>/auth/refresh</button>
         </div>
       </section>
 
       <section className="card">
-        <h2>Auth</h2>
-        <div className="actions">
-          <button className="btn" onClick={getAuthHome}>GET /auth/</button>
-        </div>
-
-        <h3>Criar usuario - POST /auth/create_user</h3>
+        <h2>Login / Cadastro</h2>
         <div className="grid three">
-          <input placeholder="name" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} />
-          <input placeholder="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} />
-          <input placeholder="number" value={userForm.number} onChange={(e) => setUserForm({ ...userForm, number: e.target.value })} />
-          <input placeholder="password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
-          <select value={userForm.status} onChange={(e) => setUserForm({ ...userForm, status: e.target.value })}>
-            <option value="true">status true</option>
-            <option value="false">status false</option>
-          </select>
-          <select value={userForm.admin} onChange={(e) => setUserForm({ ...userForm, admin: e.target.value })}>
-            <option value="false">admin false</option>
-            <option value="true">admin true</option>
-          </select>
+          <input placeholder="Nome (para cadastro)" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input placeholder="Telefone" value={customerNumber} onChange={(e) => setCustomerNumber(e.target.value)} />
+          <input placeholder="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <div className="actions">
-          <button className="btn" onClick={createUser}>Criar usuario</button>
-        </div>
-
-        <h3>Login JSON - POST /auth/login</h3>
-        <div className="grid two">
-          <input placeholder="email" value={loginJsonForm.email} onChange={(e) => setLoginJsonForm({ ...loginJsonForm, email: e.target.value })} />
-          <input placeholder="password" type="password" value={loginJsonForm.password} onChange={(e) => setLoginJsonForm({ ...loginJsonForm, password: e.target.value })} />
-        </div>
-        <div className="actions">
-          <button className="btn" onClick={loginJson}>Login JSON</button>
-        </div>
-
-        <h3>Login Form - POST /auth/login-form</h3>
-        <div className="grid two">
-          <input placeholder="username = email" value={loginFormData.username} onChange={(e) => setLoginFormData({ ...loginFormData, username: e.target.value })} />
-          <input placeholder="password" type="password" value={loginFormData.password} onChange={(e) => setLoginFormData({ ...loginFormData, password: e.target.value })} />
-        </div>
-        <div className="actions">
-          <button className="btn" onClick={loginWithForm}>Login Form</button>
+          <button className="btn" onClick={registerCustomer}>Criar conta</button>
+          <button className="btn" onClick={login}>Login</button>
         </div>
       </section>
 
       <section className="card">
-        <h2>Orders</h2>
-        <p className="hint">Todos endpoints de /orders exigem Authorization: Bearer token.</p>
-
-        <div className="actions">
-          <button className="btn" onClick={getOrdersHome}>GET /orders/</button>
-          <button className="btn" onClick={listAllOrders}>GET /orders/list</button>
-          <button className="btn" onClick={listMyOrders}>GET /orders/order/orders-user</button>
-        </div>
-
-        <h3>Criar pedido - POST /orders/order</h3>
-        <div className="grid two">
-          <input placeholder="user id" value={createOrderForm.user} onChange={(e) => setCreateOrderForm({ user: e.target.value })} />
-        </div>
-        <div className="actions">
-          <button className="btn" onClick={createOrder}>Criar pedido</button>
-        </div>
-
-        <h3>Cancelar pedido - POST /orders/order/cancel/{'{id_order}'}</h3>
-        <div className="grid two">
-          <input placeholder="id_order" value={cancelOrderId} onChange={(e) => setCancelOrderId(e.target.value)} />
-        </div>
-        <div className="actions">
-          <button className="btn" onClick={cancelOrder}>Cancelar pedido</button>
-        </div>
-
-        <h3>Adicionar item - POST /orders/order/add-item/{'{id_order}'}</h3>
+        <h2>Cardápio</h2>
         <div className="grid three">
-          <input placeholder="id_order" value={addItemOrderId} onChange={(e) => setAddItemOrderId(e.target.value)} />
-          <input placeholder="quantity" value={addItemForm.quantity} onChange={(e) => setAddItemForm({ ...addItemForm, quantity: e.target.value })} />
-          <input placeholder="flavor" value={addItemForm.flavor} onChange={(e) => setAddItemForm({ ...addItemForm, flavor: e.target.value })} />
-          <input placeholder="size" value={addItemForm.size} onChange={(e) => setAddItemForm({ ...addItemForm, size: e.target.value })} />
-          <input placeholder="unit_price" value={addItemForm.unit_price} onChange={(e) => setAddItemForm({ ...addItemForm, unit_price: e.target.value })} />
+          {MENU.map((item) => (
+            <div key={item.id} style={{ border: "1px solid var(--line)", padding: 10, borderRadius: 8 }}>
+              <h4>{item.name} - R$ {item.price}</h4>
+              <p style={{ margin: "6px 0", color: "var(--muted)" }}>{item.description}</p>
+              <div className="actions">
+                <button className="btn" onClick={() => addToCart(item)}>Adicionar</button>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="actions">
-          <button className="btn" onClick={addItemToOrder}>Adicionar item</button>
-        </div>
+      </section>
 
-        <h3>Remover item - POST /orders/order/remove-item/{'{id_item_order}'}</h3>
-        <div className="grid two">
-          <input placeholder="id_item_order" value={removeItemId} onChange={(e) => setRemoveItemId(e.target.value)} />
-        </div>
-        <div className="actions">
-          <button className="btn" onClick={removeItemFromOrder}>Remover item</button>
-        </div>
-
-        <h3>Finalizar pedido - POST /orders/order/finish/{'{id_order}'}</h3>
-        <div className="grid two">
-          <input placeholder="id_order" value={finishOrderId} onChange={(e) => setFinishOrderId(e.target.value)} />
-        </div>
-        <div className="actions">
-          <button className="btn" onClick={finishOrder}>Finalizar pedido</button>
-        </div>
-
-        <h3>Ver pedido - GET /orders/order/{'{id_order}'}</h3>
-        <div className="grid two">
-          <input placeholder="id_order" value={viewOrderId} onChange={(e) => setViewOrderId(e.target.value)} />
-        </div>
-        <div className="actions">
-          <button className="btn" onClick={viewOrderById}>Ver pedido</button>
-        </div>
+      <section className="card">
+        <h2>Carrinho</h2>
+        {cart.length === 0 ? (
+          <p>Seu carrinho está vazio.</p>
+        ) : (
+          <div>
+            {cart.map((i) => (
+              <div key={i.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                <div style={{ flex: 1 }}>{i.name} (R$ {i.price})</div>
+                <input style={{ width: 60 }} type="number" value={i.qty} onChange={(e) => changeQty(i.id, Number(e.target.value || 1))} />
+                <button className="btn danger" onClick={() => removeFromCart(i.id)}>Remover</button>
+              </div>
+            ))}
+            <div style={{ marginTop: 12 }}>
+              <strong>Total: R$ {total()}</strong>
+            </div>
+            <div className="actions" style={{ marginTop: 10 }}>
+              <button className="btn" onClick={checkout}>Finalizar pedido</button>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="card output">
-        <h2>Resposta da API</h2>
+        <h2>Resposta / Log</h2>
         <pre>{output}</pre>
       </section>
     </div>
   );
 }
+ 
+
